@@ -1,13 +1,39 @@
+import torch
 import numpy as np
+from torch.utils.data import Dataset
 
 config = {
-    'epoch':10000,
-    'batch_size':256,
-    'latent':2,
-    'log':False,
-    'scale':True,
-    'patience':50
+    'epoch': 2000,
+    'min_stop': 500,
+    'batch_size': 256,
+    'latent': 2,
+    'log': False,
+    'scale': True,
+    'var': False,
+    'patience': 50,
+    'threshold': 0.1,
+    'annealing': False,
+    'anneal_rate': 0.0003,
+    'tau0': 1.0,
+    'min_tau': 0.5
 }
+
+
+class MyDataset(Dataset):
+    def __init__(self, data, label):
+        super().__init__()
+        self.data = data
+        self.label = label
+
+        self.data = torch.tensor(self.data, dtype=torch.float32)
+        self.label = torch.tensor(self.label, dtype=torch.int64)
+
+    def __getitem__(self, index):
+        return self.data[index], self.label[index]
+
+    def __len__(self):
+        return len(self.data)  # 返回数据的总个数
+
 
 def preprocessing(dataset, log, scale):
     # DATASET = 'biase', PREFIX = 'biase'
@@ -49,7 +75,7 @@ def preprocessing(dataset, log, scale):
     if n_cell > 150:
         batch_size = config['batch_size']
     else:
-        batch_size = 32
+        batch_size = 16
 
     expr[expr < 0] = 0.0
 
