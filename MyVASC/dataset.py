@@ -1,18 +1,20 @@
 import torch
 import numpy as np
 from torch.utils.data import Dataset
+import pandas as pd
+from scipy.io import mmread
 
 config = {
-    'epoch': 2000,
-    'min_stop': 500,
+    'epoch': 1000,
+    'min_stop': 50,
     'batch_size': 256,
     'latent': 2,
-    'log': False,
+    'log': True,
     'scale': True,
-    'var': False,
-    'patience': 50,
+    'var': True,
+    'patience': 2,
     'threshold': 0.1,
-    'annealing': False,
+    'annealing': True,
     'anneal_rate': 0.0003,
     'tau0': 1.0,
     'min_tau': 0.5
@@ -35,14 +37,17 @@ class MyDataset(Dataset):
         return len(self.data)  # 返回数据的总个数
 
 
-def preprocessing(dataset, log, scale):
+# preprocessing for gene-cell matrix(row: gene, col: cell)
+# dataset: biase.txt, biase_label.txt
+
+
+def preprocessing_txt(dataset, log, scale):
     # DATASET = 'biase', PREFIX = 'biase'
-    DATASET = dataset  # sys.argv[1]
-    filename = DATASET + '.txt'
+    filename = dataset + '.txt'
     data = open(filename)
     head = data.readline().rstrip().split()
 
-    label_file = open(DATASET + '_label.txt')
+    label_file = open(dataset + '_label.txt')
     label_dict = {}
     for line in label_file:
         temp = line.rstrip().split()
@@ -71,6 +76,38 @@ def preprocessing(dataset, log, scale):
         expr.append(temp)
 
     expr = np.asarray(expr).T
+    n_cell, _ = expr.shape
+    if n_cell > 150:
+        batch_size = config['batch_size']
+    else:
+        batch_size = 16
+
+    expr[expr < 0] = 0.0
+
+    if log:
+        expr = np.log2(expr + 1)
+    if scale:
+        for i in range(expr.shape[0]):
+            expr[i, :] = expr[i, :] / np.max(expr[i, :])
+
+    return expr, id_map, label, batch_size
+
+
+def preprocessing_npy(log, scale):
+    # expr = mmread(dataset).astype("int32")
+    # expr = expr.transpose().todense()
+    expr = np.load('breast_T_cell_gene.npy')
+    df = pd.read_csv('metadata.csv')
+    label = df[df['celltype_major'] == 'T-cells']['celltype_subset'].to_numpy()
+
+    label_set = []
+    for c in label:
+        if c not in label_set:
+            label_set.append(c)
+    name_map = {value: idx for idx, value in enumerate(label_set)}
+    id_map = {idx: value for idx, value in enumerate(label_set)}
+    label = np.asarray([name_map[name] for name in label])
+
     n_cell, _ = expr.shape
     if n_cell > 150:
         batch_size = config['batch_size']

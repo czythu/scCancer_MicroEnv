@@ -5,7 +5,8 @@ import matplotlib.pyplot as plt
 # from pandas import DataFrame
 
 # sklearn
-from sklearn.metrics import normalized_mutual_info_score,adjusted_rand_score,homogeneity_score,completeness_score,silhouette_score
+from sklearn.metrics import normalized_mutual_info_score, adjusted_rand_score,\
+    homogeneity_score, completeness_score, silhouette_score
 from sklearn.cluster import KMeans
 from sklearn.cluster import SpectralClustering
 from sklearn.decomposition import PCA

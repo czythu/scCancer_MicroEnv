@@ -63,15 +63,15 @@ class VASC_pytorch(nn.Module):
             Reshape(self.in_dim)
         )
 
-    def loss_function(self, x, z_mean, z_log_var, x_decoded_mean):
+    def loss_function(self, x, z_mean, z_log_var, x_decoded_mean, kld_weight=0.005):
         """
         Computes the VAE loss function.
         KL(N(\mu, \sigma), N(0, 1)) = \log \frac{1}{\sigma} + \frac{\sigma^2 + \mu^2}{2} - \frac{1}{2}
         """
-        recons_loss = self.in_dim * F.binary_cross_entropy_with_logits(x_decoded_mean, x)
-        kl_sum = -0.5 * torch.sum(1 + z_log_var - z_mean ** 2 - torch.exp(z_log_var), dim=1)
-        kl_loss = torch.mean(kl_sum, dim=0)
-        return {'loss': (recons_loss + kl_loss), 'Reconstruction_Loss':recons_loss, 'KLD':-kl_loss}
+        # recons_loss = self.in_dim * F.binary_cross_entropy_with_logits(x_decoded_mean, x) # for biase
+        recons_loss = F.mse_loss(x_decoded_mean, x)
+        kl_loss = torch.mean(-0.5 * torch.sum(1 + z_log_var - z_mean ** 2 - torch.exp(z_log_var), dim=1), dim=0)
+        return {'loss': (recons_loss + kld_weight * kl_loss), 'Reconstruction_Loss': recons_loss, 'KLD': -kl_loss}
 
     def encode(self, input):
         """
