@@ -5,7 +5,7 @@ from torch.autograd import Variable
 import numpy as np
 
 from vasc_pytorch import VascPytorch
-from myfunc import performance_assessment, clustering, plot_2dimensions
+from myfunc import performance_assessment, clustering, plot2dimensions
 from dataset import config, MyDataset, preprocessing_txt, preprocessing_npy
 
 if __name__ == '__main__':
@@ -21,7 +21,7 @@ if __name__ == '__main__':
     train_dataset = MyDataset(expr, label_int)
     loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
 
-    model = VascPytorch(in_dim=expr.shape[1], latent=2, dist='Normal',
+    model = VascPytorch(in_dim=expr.shape[1], latent=2, dist=config['latent_dist'],
                         gpu=(mydevice == 'cuda'), var=config['var']).to(device)
     optimizer = optim.RMSprop(model.parameters(), lr=1e-3)
     all_res, all_train_loss = [], []
@@ -30,9 +30,11 @@ if __name__ == '__main__':
 
     for epoch in range(config['epoch']):
         train_loss = 0
+        # annealing
         if epoch % 100 == 0 and config['annealing']:
             tau = max(config['tau0'] * np.exp(-config['anneal_rate'] * epoch), config['min_tau'])
-            print(tau)
+            print("tau = %s" % tau)
+
         model.train()
         all_res = None
         all_labels = None
@@ -43,6 +45,10 @@ if __name__ == '__main__':
             if mydevice == "cuda":
                 X, label, tau_in = X.cuda(), label.cuda(), tau_in.cuda()
             expr, z, z_mean, z_log_var, out = model([X, tau_in])
+            if config['latent_dist'] == 'Normal':
+                lossvalue = model.lossfunction_normal(expr, z_mean, z_log_var, out)
+            else:   # config['latent_dist'] == 'Negative binomial'
+                lossvalue = model.lossfunction_nb(expr, z_mean, z_log_var, out)
 
             if all_labels is None:
                 all_labels = label
@@ -53,7 +59,6 @@ if __name__ == '__main__':
             else:
                 all_res = torch.cat([all_res, z])
 
-            lossvalue = model.loss_function(expr, z_mean, z_log_var, out)
             if i % 50 == 0:
                 print('batch' + str(i) + ': recons_loss = ' +
                       str(lossvalue['Reconstruction_Loss']) + '; kl_loss = ' + str(lossvalue['KLD']))
@@ -69,10 +74,14 @@ if __name__ == '__main__':
             result = all_res.cpu().detach().numpy()
             label = all_labels.cpu().detach().numpy()
             k = len(np.unique(label))
-            cl, _ = clustering(result, k=k)
-            dm = performance_assessment(cl, label)
+            if config['clustering_method'] == 'cmeans':
+                cluster, center, u_matrix, fpc = clustering(result, k=k, method=config['clustering_method'])
+                print("fpc = %s" % fpc)
+            else:  # config['clustering_method'] == 'kmeans' or 'spec'
+                cluster, _ = clustering(result, k=k, method=config['clustering_method'])
+            dm = performance_assessment(cluster, label)
             delta = abs(all_train_loss[epoch] - all_train_loss[epoch - 1])
             if epoch + 1 == config['epoch'] or (delta < config['threshold'] and epoch > config['min_stop']):
-                plot_2dimensions(result, label, 'VASC-2.0')
+                plot2dimensions(result, label, id_map, 'VASC-2.0')
                 break
 

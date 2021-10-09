@@ -9,15 +9,17 @@ config = {
     'min_stop': 500,
     'batch_size': 256,
     'latent': 2,
+    'latent_dist': 'Negative binomial',
     'log': False,
     'scale': True,
     'var': False,
     'patience': 50,
     'threshold': 1,
-    'annealing': True,
+    'annealing': False,
     'anneal_rate': 0.0003,
     'tau0': 1.0,
-    'min_tau': 0.5
+    'min_tau': 0.5,
+    'clustering_method': 'cmeans'
 }
 
 
