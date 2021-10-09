@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader
 from torch.autograd import Variable
 import numpy as np
 
-from vasc_pytorch import VASC_pytorch
+from vasc_pytorch import VascPytorch
 from myfunc import performance_assessment, clustering, plot_2dimensions
 from dataset import config, MyDataset, preprocessing_txt, preprocessing_npy
 
@@ -16,12 +16,13 @@ if __name__ == '__main__':
     print(mydevice)
 
     device = torch.device(mydevice)
-    expr, id_map, label_int, batch_size = preprocessing_npy(log=config['log'], scale=config['scale'])
-    # expr, id_map, label_int, batch_size = preprocessing_txt('biase', log=config['log'], scale=config['scale'])
+    # expr, id_map, label_int, batch_size = preprocessing_npy(log=config['log'], scale=config['scale'])
+    expr, id_map, label_int, batch_size = preprocessing_txt('biase', log=config['log'], scale=config['scale'])
     train_dataset = MyDataset(expr, label_int)
     loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
 
-    model = VASC_pytorch(in_dim=expr.shape[1], latent=2, gpu=(mydevice == 'cuda'), var=config['var']).to(device)
+    model = VascPytorch(in_dim=expr.shape[1], latent=2, dist='Normal',
+                        gpu=(mydevice == 'cuda'), var=config['var']).to(device)
     optimizer = optim.RMSprop(model.parameters(), lr=1e-3)
     all_res, all_train_loss = [], []
     tau = config['tau0']

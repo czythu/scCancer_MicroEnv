@@ -9,9 +9,31 @@ from sklearn.metrics import normalized_mutual_info_score, adjusted_rand_score,\
     homogeneity_score, completeness_score, silhouette_score
 from sklearn.cluster import KMeans
 from sklearn.cluster import SpectralClustering
-from sklearn.decomposition import PCA
-from sklearn.manifold import TSNE
-from sklearn.covariance import EllipticEnvelope
+# from sklearn.covariance import EllipticEnvelope
+
+# clustering
+
+
+def clustering(points, k=2, name='kmeans'):
+
+    # points: N_samples * N_features
+    # k: number of clusters
+
+    if name == 'kmeans':
+        kmeans = KMeans(n_clusters=k, n_init=100).fit(points)
+        if len(np.unique(kmeans.labels_)) > 1:
+            si = silhouette_score(points, kmeans.labels_)
+        else:
+            si = 0
+            print("Silhouette:" + str(si))
+        return kmeans.labels_, si
+
+    if name == 'spec':
+        spec = SpectralClustering(n_clusters=k, affinity='cosine').fit(points)
+        si = silhouette_score(points, spec.labels_)
+        print("Silhouette:" + str(si))
+        return spec.labels_, si
+
 
 # performance assessment
 
@@ -28,44 +50,18 @@ def performance_assessment(predict, ground_truth):
     return {'NMI': nmi, 'RAND': rand, 'HOMOGENEITY': homo, 'COMPLETENESS': completeness}
 
 
-# clustering
-
-
-def clustering(points, k=2, name='kmeans'):
-    '''
-    points: N_samples * N_features
-    k: number of clusters
-    '''
-    if name == 'kmeans':
-        kmeans = KMeans(n_clusters=k, n_init=100).fit(points)
-        ## print within_variance
-        # cluster_distance = kmeans.transform( points )
-        # within_variance = sum( np.min(cluster_distance,axis=1) ) / float( points.shape[0] )
-        # print("AvgWithinSS:"+str(within_variance))
-        if len(np.unique(kmeans.labels_)) > 1:
-            si = silhouette_score(points, kmeans.labels_)
-            # print("Silhouette:"+str(si))
-        else:
-            si = 0
-            print("Silhouette:" + str(si))
-        return kmeans.labels_, si
-
-    if name == 'spec':
-        spec = SpectralClustering(n_clusters=k, affinity='cosine').fit(points)
-        si = silhouette_score(points, spec.labels_)
-        print("Silhouette:" + str(si))
-        return spec.labels_, si
-
-
 # outliers detection
 
 
-def outliers_detection(expr):
-    x = PCA(n_components=2).fit_transform(expr)
-    ee = EllipticEnvelope()
-    ee.fit(x)
-    outliers = ee.predict(x)
-    return outliers
+# def outliers_detection(expr):
+#     x = PCA(n_components=2).fit_transform(expr)
+#     ee = EllipticEnvelope()
+#     ee.fit(x)
+#     outliers = ee.predict(x)
+#     return outliers
+
+
+# plot(2 dimensions)
 
 
 def plot_2dimensions(result, label, title):

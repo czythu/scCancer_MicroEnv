@@ -1,26 +1,33 @@
+import numpy as np
 import torch
 from torch import nn
 import torch.nn.functional as F
+
 
 class Lambda(nn.Module):
     def __init__(self, func):
         super().__init__()
         self.func = func
+
     def forward(self, x):
         return self.func(x)
+
 
 class Reshape(nn.Module):
     def __init__(self, args):
         super(Reshape, self).__init__()
         self.shape = args
+
     def forward(self, x):
         return x.view(-1, self.shape, 1)        # shape: batch * feature * 1
 
-class VASC_pytorch(nn.Module):
-    def __init__(self, in_dim, latent=2, gpu=False, var=False):
-        super(VASC_pytorch, self).__init__()
+
+class VascPytorch(nn.Module):
+    def __init__(self, in_dim, latent=2, dist='Normal', gpu=False, var=False):
+        super(VascPytorch, self).__init__()
         self.in_dim = in_dim # expr.shape[1]
         self.latent = latent
+        self.dist = dist
         self.var = var
         self.gpu = gpu
 
@@ -34,8 +41,8 @@ class VASC_pytorch(nn.Module):
             nn.ReLU(True)
         )
 
-        self.fc_mu = nn.Linear(32, latent)
-        self.fc_var = nn.Linear(32, latent)
+        self.fc_parm1 = nn.Linear(32, latent)
+        self.fc_parm2 = nn.Linear(32, latent)
 
         self.decoder = nn.Sequential(
             nn.Linear(latent, 32),
@@ -63,13 +70,13 @@ class VASC_pytorch(nn.Module):
             Reshape(self.in_dim)
         )
 
-    def loss_function(self, x, z_mean, z_log_var, x_decoded_mean, kld_weight=0.005):
+    def loss_function(self, x, z_mean, z_log_var, x_decoded_mean, kld_weight=1):
         """
         Computes the VAE loss function.
         KL(N(\mu, \sigma), N(0, 1)) = \log \frac{1}{\sigma} + \frac{\sigma^2 + \mu^2}{2} - \frac{1}{2}
         """
-        # recons_loss = self.in_dim * F.binary_cross_entropy_with_logits(x_decoded_mean, x) # for biase
-        recons_loss = F.mse_loss(x_decoded_mean, x)
+        recons_loss = self.in_dim * F.binary_cross_entropy_with_logits(x_decoded_mean, x) # for biase
+        # recons_loss = F.mse_loss(x_decoded_mean, x)
         kl_loss = torch.mean(-0.5 * torch.sum(1 + z_log_var - z_mean ** 2 - torch.exp(z_log_var), dim=1), dim=0)
         return {'loss': (recons_loss + kld_weight * kl_loss), 'Reconstruction_Loss': recons_loss, 'KLD': -kl_loss}
 
@@ -82,12 +89,16 @@ class VASC_pytorch(nn.Module):
         """
         result = self.encoder(input)
         # Split the result into mu and var components of the latent Gaussian distribution
-        z_mean = self.fc_mu(result)
-        if self.var:
-            z_log_var = F.softplus(self.fc_var(result))
-            return z_mean, z_log_var
+        if self.dist == 'Normal':
+            z_mean = self.fc_parm1(result)
+            if self.var:
+                z_log_var = F.softplus(self.fc_parm2(result))
+                return z_mean, z_log_var
+            else:
+                return z_mean
         else:
-            return z_mean
+            r, p = self.fc_parm1(result), F.softplus(self.fc_parm2(result))
+            return r, p
 
     def decode(self, z):
         """
@@ -105,20 +116,36 @@ class VASC_pytorch(nn.Module):
         :param z_log_var: (Tensor) Standard deviation of the latent Gaussian [B x D]
         :return: (Tensor) [B x D]
         """
-        z_mean, z_log_var = args
-        std = torch.exp(0.5 * z_log_var)
-        eps = torch.randn_like(std)
-        if self.gpu:
-            std, eps = std.cuda(), eps.cuda()
-        return z_mean + eps * std
 
-    def scDropout_immitation(self, expr):
+        if self.dist == 'Normal':
+            z_mean, z_log_var = args
+            std = torch.exp(0.5 * z_log_var)
+            eps = torch.randn_like(std)
+            if self.gpu:
+                std, eps = std.cuda(), eps.cuda()
+            # np.random.multivariate_normal(z_mean, )
+            return z_mean + eps * std
+        # elif self.dist == 'Negative binomial':
+        #     r, p = args
+        #     all_samples = None
+        #     for i in range(r.shape[0]):
+        #         nb_model = torch.distributions.negative_binomial.\
+        #             NegativeBinomial(total_count=r[i].cpu().detach().numpy(), probs=p[i].cpu().detach().numpy())
+        #         sample = nb_model.sample(sample_shape=torch.Size(r[i]))
+        #         if all_samples is None:
+        #             all_samples = sample
+        #         else:
+        #             all_samples = torch.cat([all_samples, sample])
+        #     return all_samples
+
+
+    def sc_dropout_imitation(self, expr):
         expr_x_drop = self.dropout_rate(expr)                           # shape: batch * feature * 1
         expr_x_nondrop = self.nondropout_rate(expr)                     # shape: batch * feature * 1
         logits = torch.cat([expr_x_drop, expr_x_nondrop], dim=-1)       # shape: batch * feature * 2
         return logits
 
-    def ZeroInflatedLayer(self, args, eps=1e-8):
+    def zero_inflated_layer(self, args, eps=1e-8):
         logits, tau = args
         uniform = torch.rand(logits.shape)                    # u ~ U(0, 1)
         if self.gpu:
@@ -132,18 +159,26 @@ class VASC_pytorch(nn.Module):
     def forward(self, args):
         expr_ori, tau = args[0], args[1]
         expr = self.dropout(expr_ori)
-        z_log_var = torch.ones(expr.shape[0], self.latent)
-        if self.gpu:
-            z_log_var = z_log_var.cuda()
-        if self.var:
-            z_mean, z_log_var = self.encode(expr)
-        else:
-            z_mean = self.encode(expr)
-        z = self.reparameterize([z_mean, z_log_var])
+
+        if self.dist == 'Normal':           # self.dist == 'Normal'
+            z_log_var = torch.ones(expr.shape[0], self.latent)
+            # z_log_var = torch.as_tensor(np.array([np.identity(self.latent) for i in range(expr.shape[0])]))
+            if self.gpu:
+                z_log_var = z_log_var.cuda()
+            if self.var:
+                z_mean, z_log_var = self.encode(expr)
+            else:
+                z_mean = self.encode(expr)
+            z = self.reparameterize([z_mean, z_log_var])
+        else:                               # self.dist == 'Negative binomial'
+            r, p = self.encode(expr)
+            z_mean, z_log_var = p * r / (1 - p), p * r / (1 - p) ** 2
+            z = self.reparameterize([r, p])
+
         expr_new = self.decode(z)
-        logits = self.scDropout_immitation(expr_new)
+        logits = self.sc_dropout_imitation(expr_new)
         tau = tau.repeat(1, 2).view(-1, 2, self.in_dim).transpose(1, 2)  # shape: batch * feature * 2
-        out = torch.mul(expr, self.ZeroInflatedLayer([logits, tau]))
+        out = torch.mul(expr, self.zero_inflated_layer([logits, tau]))
         return [expr_ori, z, z_mean, z_log_var, out]
 
         # example(2 samples, 3 features)

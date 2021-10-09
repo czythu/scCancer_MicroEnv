@@ -2,18 +2,18 @@ import torch
 import numpy as np
 from torch.utils.data import Dataset
 import pandas as pd
-from scipy.io import mmread
+# from scipy.io import mmread
 
 config = {
-    'epoch': 1000,
-    'min_stop': 50,
+    'epoch': 2000,
+    'min_stop': 500,
     'batch_size': 256,
     'latent': 2,
-    'log': True,
+    'log': False,
     'scale': True,
-    'var': True,
-    'patience': 2,
-    'threshold': 0.1,
+    'var': False,
+    'patience': 50,
+    'threshold': 1,
     'annealing': True,
     'anneal_rate': 0.0003,
     'tau0': 1.0,
