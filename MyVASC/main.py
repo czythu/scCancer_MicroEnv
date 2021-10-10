@@ -46,9 +46,9 @@ if __name__ == '__main__':
                 X, label, tau_in = X.cuda(), label.cuda(), tau_in.cuda()
             expr, z, z_mean, z_log_var, out = model([X, tau_in])
             if config['latent_dist'] == 'Normal':
-                lossvalue = model.lossfunction_normal(expr, z_mean, z_log_var, out)
+                loss_value = model.lossfunction_normal(expr, z_mean, z_log_var, out)
             else:   # config['latent_dist'] == 'Negative binomial'
-                lossvalue = model.lossfunction_nb(expr, z_mean, z_log_var, out)
+                loss_value = model.lossfunction_nb(expr, z_mean, z_log_var, out)
 
             if all_labels is None:
                 all_labels = label
@@ -61,11 +61,11 @@ if __name__ == '__main__':
 
             if i % 50 == 0:
                 print('batch' + str(i) + ': recons_loss = ' +
-                      str(lossvalue['Reconstruction_Loss']) + '; kl_loss = ' + str(lossvalue['KLD']))
+                      str(loss_value['Reconstruction_Loss']) + '; kl_loss = ' + str(loss_value['KLD']))
             optimizer.zero_grad()
-            lossvalue['loss'].backward()
+            loss_value['loss'].backward()
             optimizer.step()
-            train_loss += float(lossvalue['loss'])
+            train_loss += float(loss_value['loss'])
 
         all_train_loss.append(train_loss / len(loader))
         print("epoch:" + str(epoch) + ": train loss = " + ' ' + str(train_loss / len(loader)))

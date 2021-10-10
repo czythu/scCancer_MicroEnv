@@ -1,7 +1,6 @@
-import numpy as np
 import torch
 from torch import nn
-import torch.nn.functional as F
+import torch.nn.functional as f
 
 
 class Lambda(nn.Module):
@@ -72,16 +71,15 @@ class VascPytorch(nn.Module):
 
     # Compute the VAE loss function(latent distribution: Normal)
     def lossfunction_normal(self, x, z_mean, z_log_var, x_decoded_mean, kld_weight=1):
-        recons_loss = self.in_dim * F.binary_cross_entropy_with_logits(x_decoded_mean, x) # for biase
-        # recons_loss = F.mse_loss(x_decoded_mean, x)
+        recons_loss = self.in_dim * f.binary_cross_entropy_with_logits(x_decoded_mean, x)   # for biase
         kl_loss = torch.mean(-0.5 * torch.sum(1 + z_log_var - z_mean ** 2 - torch.exp(z_log_var), dim=1), dim=0)
         return {'loss': (recons_loss + kld_weight * kl_loss), 'Reconstruction_Loss': recons_loss, 'KLD': -kl_loss}
 
     # Compute the VAE loss function(latent distribution: Negative binomial)
     # z_mean, z_log_var = p * r / (1 - p), p * r / (1 - p) ** 2
     def lossfunction_nb(self, x, z_mean, z_log_var, x_decoded_mean, kld_weight=1):
-        recons_loss = self.in_dim * F.binary_cross_entropy_with_logits(x_decoded_mean, x) # for biase
-        # recons_loss = F.mse_loss(x_decoded_mean, x)
+        recons_loss = self.in_dim * f.binary_cross_entropy_with_logits(x_decoded_mean, x)
+        # recons_loss = f.mse_loss(x_decoded_mean, x)
         # Error !
         kl_loss = torch.mean(-0.5 * torch.sum(1 + z_log_var - z_mean ** 2 - torch.exp(z_log_var), dim=1), dim=0)
         return {'loss': (recons_loss + kld_weight * kl_loss), 'Reconstruction_Loss': recons_loss, 'KLD': -kl_loss}
@@ -98,15 +96,15 @@ class VascPytorch(nn.Module):
         if self.dist == 'Normal':
             z_mean = self.fc_parm1(result)
             if self.var:
-                z_log_var = F.softplus(self.fc_parm2(result))
+                z_log_var = f.softplus(self.fc_parm2(result))
                 return z_mean, z_log_var
             else:
                 return z_mean
         else:
             # r∈R, p∈[0, 1]
-            # r = torch.tensor(F.softplus(self.fc_parm1(result)).ceil(), dtype=torch.int64)
-            r = F.softplus(self.fc_parm1(result))
-            p = F.sigmoid(self.fc_parm2(result))
+            # r = torch.tensor(f.softplus(self.fc_parm1(result)).ceil(), dtype=torch.int64)
+            r = f.softplus(self.fc_parm1(result))
+            p = f.sigmoid(self.fc_parm2(result))
             return r, p
 
     def decode(self, z):
@@ -121,7 +119,7 @@ class VascPytorch(nn.Module):
     def reparameterize_nb(self, r, p):
         nb_model = torch.distributions.negative_binomial.NegativeBinomial(total_count=r, probs=p)
         sample = nb_model.sample(sample_shape=torch.Size([1]))
-        output = F.softplus(sample[0])                                          # F.sigmoid(sample[0])
+        output = f.softplus(sample[0])                                          # F.sigmoid(sample[0])
         return output
 
     def reparameterize_normal(self, z_mean, z_log_var):
@@ -150,7 +148,7 @@ class VascPytorch(nn.Module):
         if self.gpu:
             uniform = uniform.cuda()
         gumbel = -torch.log(-torch.log(uniform + eps) + eps)  # g = -log (-log u)
-        gumbel_softmax = F.softmax((logits + gumbel) / tau)   # exp[(log p + g) / tau], exp[(log (1 - p) + g) / tau]
+        gumbel_softmax = f.softmax((logits + gumbel) / tau)   # exp[(log p + g) / tau], exp[(log (1 - p) + g) / tau]
         samples = gumbel_softmax[:, :, 1]                     # select last column
         samples = samples.view(-1, self.in_dim)               # shape: batch * feature
         return samples

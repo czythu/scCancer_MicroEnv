@@ -9,7 +9,7 @@ config = {
     'min_stop': 500,
     'batch_size': 256,
     'latent': 2,
-    'latent_dist': 'Negative binomial',
+    'latent_dist': 'Normal',  # Negative binomial
     'log': False,
     'scale': True,
     'var': False,
